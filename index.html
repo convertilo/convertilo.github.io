@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Compress an image to an exact file size in the browser: binary search on quality</title>
+<meta name="description" content="How to hit a target file size (200 KB, 1 MB) when compressing JPEG/WebP in the browser: why there is no formula, a 7-probe binary search, and what to do when the target is unreachable.">
+<meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:17px/1.6 system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;color:#222}pre{background:#f4f4f4;padding:1rem;overflow:auto}</style></head><body>
+<h1>Compress an image to an exact file size in the browser: binary search on quality</h1>
+<p>Upload forms love limits: "up to 200 KB", "up to 1 MB". Users then search for a way to shrink a photo <em>to</em> a number, not to "some quality". Here is how I implemented that in a client-side compressor, and the edge cases that matter.</p>
+<h2>There is no formula from quality to bytes</h2>
+<p>The output size of a JPEG or WebP at a given quality depends on the content: noise and fine detail cost far more than gradients. Two photos at quality 80 can differ several times in size, so you have to probe.</p>
+<h2>The search</h2>
+<ol>
+<li><strong>Try quality 100 first.</strong> If the file is already under the target, return it untouched. Do not degrade an image that does not need it.</li>
+<li>Otherwise run a binary search over quality. About 7 probes narrow the range to roughly one quality point.</li>
+<li>Return the <em>best fit</em>: the highest quality whose output still fits, not the first one that fits.</li>
+</ol>
+<pre><code>let lo = 1, hi = 100, best = null
+for (let i = 0; i &lt; 7; i++) {
+  const q = Math.round((lo + hi) / 2)
+  const blob = await encode(img, q)
+  if (blob.size &lt;= target) { best = { q, blob }; lo = q + 1 } else { hi = q - 1 }
+}
+</code></pre>
+<h2>When the target is unreachable</h2>
+<p>For some images even quality 1 stays above the limit. Returning that file silently is a lie to a user who came for the limit. Return the smallest result, flag <code>reachedTarget = false</code>, and tell the user to reduce the resolution as well.</p>
+<h2>What I measured</h2>
+<p>A 5.61 MB PNG made of random noise (the worst case, since noise does not compress): target 1 MB gave 1.83 MB at quality 5 with the warning; target 5 MB took the fast path and gave 1.87 MB at quality 100. Random noise barely changes size between qualities, so treat this as a test of the edge cases, not of compression ratios on real photos.</p>
+<h2>Try it</h2>
+<p>The implementation behind this is a free tool: <a href="https://convertilo.io/images/compress/">compress images in the browser</a>. Nothing is uploaded, it runs in your tab. For a Russian audience there are separate pages per limit, for example <a href="https://convertilo.ru/images/compress/size/200kb/">сжать фото до 200 КБ</a>.</p>
+<p><small>Notes by the Convertilo team.</small></p>
+</body></html>
